@@ -1,0 +1,148 @@
+    public class DataTable : TemplatedControl
+    {
+        
+        public static readonly StyledProperty<DataTableModel> TableModelProperty =
+            AvaloniaProperty.Register<DataTable, DataTableModel>(nameof(TableModel));
+        
+        public DataTableModel TableModel
+        {
+            get => GetValue(TableModelProperty);
+            set => SetValue(TableModelProperty, value);
+        }
+        
+        public DataTable()
+        {
+            TableModelProperty.Changed.Subscribe(e =>
+            {
+                // work out on which view the property is changed
+                var view = (DataTable)e.Sender;
+                if (e.OldValue.GetValueOrDefault() is { } old)
+                {
+                    // unregister (detach)
+                    old.DataTableInvalidated -= view.ModelInvalidated;
+                }
+                if (e.NewValue.GetValueOrDefault() is { } @new)
+                {
+                    // register (attach)
+                    @new.DataTableInvalidated += view.ModelInvalidated;
+                }
+                view.ModelInvalidated(view.TableModel);
+            });
+        }
+        private void ModelInvalidated(DataTableModel? sender)
+        {
+            // invoke on the UI thread
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                this.InvalidateArrange(); // not necessarily needed in this simple example
+                this.InvalidateVisual();
+            });
+        }
+    }
+    
+    
+    public delegate void DataTableInvalidated(DataTableModel sender);
+    public class DataTableModel 
+    {
+        
+        public DataTableModel()
+        {
+            
+        }
+        public List<Row> Rows { get; } = new();
+        public List<Column> Columns { get; } = new();
+        
+        public void ClearRows() => Rows.Clear();
+        public void ClearColumns() => Columns.Clear();
+        public void Reset()
+        {
+            ClearColumns();
+            ClearRows();
+        }
+
+        public void AddColumn(string name, Type cellType)
+        {
+            Columns.Add(new(name, cellType));
+        }
+
+        public void AddRow(object[] rowData)
+        {
+            if (rowData.Length > Columns.Count)
+                throw new InvalidOperationException("Can't add more rows than columns!");
+            Row row = new Row();
+            for (int i = 0; i < rowData.Length; i++)
+            {
+                row.Cells.Add(Columns[i].CreateCell(rowData[i]));
+            }
+            Rows.Add(row);
+        }
+
+        #region Update Event
+        public event DataTableInvalidated? DataTableInvalidated;
+        public void Invalidate()
+        {
+            if(DataTableInvalidated != null)
+                DataTableInvalidated!.Invoke(this);
+        }
+        #endregion
+    }
+    
+    <Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:easyMESUR_GUI.Controls.DataTable">
+    <Design.PreviewWith>
+        <controls:DataTable/>
+    </Design.PreviewWith>
+
+    <Style Selector="controls|DataTable">
+        <!-- Set Defaults -->
+        <Setter Property="TableModel" Value="{Binding TableModel}"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <DockPanel>
+                    <ItemsControl DockPanel.Dock="Top" Items="{Binding TableModel.Columns}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="{Binding TableModel.Columns.Count}"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderThickness="1" BorderBrush="Red">
+                                    <TextBlock HorizontalAlignment="Center" Text="{Binding Name}"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl Items="{Binding TableModel.Rows}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows ="{Binding TableModel.Rows.Count}"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ItemsControl DockPanel.Dock="Top" Items="{Binding Cells}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="{Binding Cells.Count}"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderThickness="1" BorderBrush="Red">
+                                                <TextBlock HorizontalAlignment="Center" Text="{Binding Content}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+</Styles>
+
+    
